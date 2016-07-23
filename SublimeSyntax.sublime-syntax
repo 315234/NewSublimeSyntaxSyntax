@@ -148,28 +148,11 @@ contexts:
     - include: regex_common
 
   regex_multiline:
-    # We can only account for the most common use of block strings
+    # Pop when we find a line starting with some_identifier:
     - meta_content_scope: meta.multiline_regex
-    # Group with no content, e.g. (?xi)
-    - match: (?xi:(\() (\?) ([imx]*) (:?) (\)) )
-      captures:
-        1: punctuation.parenthesis.group.begin
-        2: punctuation.questionmark
-        3: constant.numeric.group_options
-        4: punctuation.colon.group
-        5: punctuation.parenthesis.group.end
-      scope: constant.builtin
-    # Assume a single group and then pop
-    - match: (?=\()
-      set:
-        - meta_scope: meta.multiline_regex
-        - include: regex_group
-    # ignore space
-    - match: \s+
-    # Anything else....
-    - match: (?=.)
-      scope: invalid.illegal
+    - match: (?=^\s*{{ident}}:)
       pop: true
+    - include: regex_common
 
 
   regex_common:
@@ -238,7 +221,16 @@ contexts:
       scope: punctuation.parenthesis.group.begin
       set:
         - meta_content_scope: meta.regex_group
-        # Group options ?xi: etc.
+        # Group with no content, e.g. (?xi)
+        - match: (?xi:(\?) ([imx]*) (:?) (\)) )
+          captures:
+            1: punctuation.questionmark
+            2: constant.numeric.group_options
+            3: punctuation.colon.group
+            4: punctuation.parenthesis.group.end
+          scope: constant.builtin
+          pop: true
+      # Group options ?xi: etc.
         - match: (\?)([imx]*)([:])
           captures:
             1: punctuation.group_questionmark
