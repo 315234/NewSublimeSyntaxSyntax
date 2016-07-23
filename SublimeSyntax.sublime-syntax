@@ -1,0 +1,306 @@
+%YAML 1.2
+---
+name: NewSublimeSyntaxSyntax
+file_extensions: [sublime-syntax]
+first_line_match: (?xi:% YAML \s 1.2)
+scope: source.sublime-syntax
+hidden: false
+
+variables:
+  ident: '[A-Za-z_][-A-Za-z_0-9]*'
+  scopestr: '[A-Za-z_0-9.-]+'
+
+contexts:
+  prototype:
+    - match: \#.*
+      scope: comment.line
+  main:
+    - match: \%YAML 1.2
+      scope: keyword.header
+    - match: ---
+      scope: punctuation.header
+
+    - match: name[:]
+      scope: keyword.name
+      push:
+        - include: pop_at_eol
+        - match: (?x:{{ident}})
+          scope: variable.constant
+
+    - match: file_extensions[:]
+      scope: keyword.file_extensions
+      push:
+        - include: square_brackets
+        - include: pop_at_eol
+
+    - match: first_line_match[:]
+      scope: keyword.first_line_match
+      push: regex_oneline
+
+    - match: hidden[:]
+      scope: keyword.hidden
+      push: expect_bool
+
+    - match: scope[:]
+      scope: keyword.scope
+      push:
+        - include: pop_at_eol
+        - match: (?x:{{ident}})
+          scope: variable.parameter
+
+    - match: variables[:]
+      scope: keyword.variables
+      push: variables_context
+    - match: contexts[:]
+      scope: keyword.contexts
+      push: contexts_context
+
+  pop_at_eol:
+    - match: $
+      pop: true
+  square_brackets:
+    - match: \[
+      push:
+        - meta_scope: meta.square_brackets
+        - match: \]
+          pop: true
+
+  variables_context:
+    - meta_scope: meta.variables
+    - match: ^(?=\w)
+      pop: true
+
+    # Multiline variable
+    - match: (?xi:({{ident}}):\s* ([|]) )
+      captures:
+        1: entity.name.function
+        2: punctuation.verticalbar
+      push: regex_multiline
+
+    # Single line variable
+    - match: (?x:({{ident}}):)
+      captures:
+        1: entity.name.function
+      push: regex_oneline
+
+  contexts_context:
+    - meta_scope: meta.contexts
+
+    - match: ^(?=\w)
+      pop: true
+
+    - match: ^\s*(?xi:-)
+      scope: punctuation.dash.start_of_map
+
+    # Multiline match
+    - match: (?xi:\s+ (match)[:] \s* ([|]) \n )
+      captures:
+        1: keyword.match
+        2: punctuation.verticalbar
+      push: regex_multiline
+
+    # Single line match
+    - match: (?xi:\s+ (match)[:] \s* )
+      captures:
+        1: keyword.match
+      push: regex_oneline
+
+    - match: (?xi:\s+ (meta_scope|meta_content_scope|push|set|include|captures|syntax|with_prototype):)
+      captures:
+        1: keyword
+
+    - match: (?xi:\s+ (pop|meta_include_prototype):)
+      captures:
+        1: keyword
+        2: constant.language.bool
+      push: expect_bool
+
+    - match: (?xi:(\d+):\s*)
+      captures:
+        1: keyword
+      push: scope_list
+
+    - match: (?xi:(scope):\s*)
+      captures:
+        1: keyword.pop
+      push: scope_list
+
+    # A context name
+    - match: (?x:({{ident}}):)
+      captures:
+        1: entity.name.function
+
+    - match: |
+        (?xi)
+        (?:
+          This is just a [big] (multi|line) regex to test {{ident}}. It should never be matched. (((noing)))
+          (?xi: This
+              | is                                # This is a regex comment
+              | more                              # This is a regular comment
+              | (Stuff|to|[match]+\s+\w+\a+\b))
+        )
+      scope: invalid.illegal
+
+  regex_oneline:
+    - meta_scope: meta.regex_oneline
+    - include: pop_at_eol
+    - include: regex_common
+
+  regex_multiline:
+    # We can only account for the most common use of block strings
+    - meta_content_scope: meta.multiline_regex
+    # Group with no content, e.g. (?xi)
+    - match: (?xi:(\() (\?) ([imx]*) (:?) (\)) )
+      captures:
+        1: punctuation.parenthesis.group.begin
+        2: punctuation.questionmark
+        3: constant.numeric.group_options
+        4: punctuation.colon.group
+        5: punctuation.parenthesis.group.end
+      scope: constant.builtin
+    # Assume a single group and then pop
+    - match: (?=\()
+      set:
+        - meta_scope: meta.multiline_regex
+        - include: regex_group
+    # ignore space
+    - match: \s+
+    # Anything else....
+    - match: (?=.)
+      scope: invalid.illegal
+      pop: true
+
+
+  regex_common:
+    - meta_scope: meta.regex_common
+    # Escapes
+    - match: (?xi:\\ ( \\ | \( | \) | \[ | \] | \{ | \} | \? | \| | \+ | \* | \^ | \$ | \# | \" | \' | \& | \. ))
+      scope: string
+    # characters
+    - match: \\[tvnrbfae]
+      scope: support.constant.regex
+    # character types
+    - match: \\[wWsSdDhH]
+      scope: support.constant.regex
+    # \p{....}
+    - match: (?xi:\\ [pP] \{ \^? {{ident}} \} )
+      scope: support.constant.regex
+    # Anchors
+    - match: ^something$
+    - match: (\^|\$|\\[bBAZzG])
+      scope: support.constant.regex
+    # Backreferences or Subexp calls
+    - match: (?xi:\\ ( \d+ | [kg]<(-? (\d+|{{ident}}))> | [kg]'(-? (\d+|{{ident}}))' ) )
+      scope: entity.name.tag
+
+
+    # Unhandled escape
+    - match: \\ \+
+      scope: invalid.illegal
+
+    # # Comment group
+    # - match: (?=\(\#)
+    #   push:
+    #     - meta_scope: comment.regex
+    #     - match: \)
+    #       pop: true
+    # Matches that push work to other contexts
+    - match: (?=\()
+      push: regex_group
+    - match: (?=\[)
+      push: regex_character_range
+    - match: (?=\{\{)
+      push: sublime_syntax_variable
+
+    # Quantifier
+    - match: (\?|\*|\+)
+      scope: punctuation.quantifier.regex
+    # Must come after {{ match
+    # {n,m}, {n,}, or {,m} (also allows {})
+    - match: (?xi:(\{) \s* (\d+)? \s* (,)? \s* (\d+)? \s* (\}) )
+      captures:
+        0: meta.repetition
+        1: punctuation.braces.begin
+        2: constant.numeric
+        3: punctuation.comma
+        4: constant.numeric
+        5: punctuation.braces.end
+
+    # Unpatched parenthesis
+    - match: (?xi:\)|\]|\})
+      scope: invalid.illegal
+
+  regex_group:
+    - meta_content_scope: meta.regex_group
+    # Consume opening bracket
+    - match: \(
+      scope: punctuation.parenthesis.group.begin
+      set:
+        - meta_content_scope: meta.regex_group
+        # Group options ?xi: etc.
+        - match: (\?)([imx]*)([:])
+          captures:
+            1: punctuation.group_questionmark
+            2: constant.numeric.group_options
+            3: punctuation.group_colon
+        # Lookaheads etc
+        - match: (\?)(=|!|<=|<!|>)
+          captures:
+            1: punctuation.group_questionmark
+            2: punctuation.lookahead_etc
+        # Named subgroups
+        - match: (\?)(?<this><{{ident}}>|\'{{ident}}\')
+          captures:
+            1: punctuation.group_questionmark
+            2: entity.name.tag.subgroup
+        # Pop on matching closing parenthesis
+        - match: \)
+          scope: punctuation.parenthesis.group.end
+          pop: true
+        - match: \|
+          scope: punctuation.regex_group_separator
+        - include: regex_common
+
+  sublime_syntax_variable:
+    - meta_content_scope: meta.sublime_syntax_variable
+    - match: \{\{
+      scope: punctuation.parenthesis.double_brace.begin
+    - match: (?:{{ident}})
+      scope: entity.name.tag
+    - match: \}\}
+      scope: punctuation.parenthesis.double_brace.end
+      pop: true
+    - match: .
+      scope: invalid.illegal
+      pop: true
+  regex_character_range:
+    - meta_scope: meta.character_range
+    - match: \[
+      scope: punctuation.square.begin
+    - match: \]
+      scope: punctuation.square.end
+      pop: true
+    - match: .
+      scope: constant.character
+
+
+
+
+
+
+
+
+
+
+
+  scope_list:
+    - include: pop_at_eol
+    - match: (?xi:{{scopestr}})
+      scope: entity.name.tag
+
+
+  expect_bool:
+    - include: pop_at_eol
+    - match: \b(true|false)\b
+      scope: constant.language.bool
+      pop: true
