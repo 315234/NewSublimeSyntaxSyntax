@@ -108,6 +108,7 @@ contexts:
     - match: (?xi:\s+ (meta_scope|meta_content_scope|push|set|include|captures|syntax|with_prototype):)
       captures:
         1: keyword
+      push: scope_list
 
     - match: (?xi:\s+ (pop|meta_include_prototype):)
       captures:
